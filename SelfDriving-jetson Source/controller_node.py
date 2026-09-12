@@ -42,8 +42,8 @@ class ControllerNode(Node):
         self.declare_parameter('min_servo', -6)
         self.declare_parameter('max_servo', 6)
         self.declare_parameter('publish_rate_hz', 30.0)
-        self.declare_parameter('ema_alpha', 0.85)
-        self.declare_parameter('max_steer_rate', 3.5)
+        self.declare_parameter('ema_alpha', 0.80)
+        self.declare_parameter('max_steer_rate', 2.8)
 
         self._load_params()
 

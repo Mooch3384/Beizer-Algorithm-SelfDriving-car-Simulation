@@ -93,9 +93,9 @@ class BezierLaneDetectorNode(Node):
         self.declare_parameter('kp', 0.70)
         self.declare_parameter('ki', 0.00)
         self.declare_parameter('kd', 1.00)
-        self.declare_parameter('kc', 0.15)          # Curvature feedforward
-        self.declare_parameter('k_heading', 0.30)   # Heading error damping
-        self.declare_parameter('d_filter_alpha', 0.20)
+        self.declare_parameter('kc', 0.18)          # Curvature feedforward
+        self.declare_parameter('k_heading', 0.20)   # Heading alignment
+        self.declare_parameter('d_filter_alpha', 0.40)
 
         # Lookahead horizons (relative to image height)
         self.declare_parameter('lookahead_near_ratio', 0.85)
@@ -458,10 +458,10 @@ class BezierLaneDetectorNode(Node):
             # Left lane search window
             if prev_cx_l is None:
                 search_l_min = 0
-                search_l_max = int(car_x + 50)
+                search_l_max = int(car_x + 80)
             else:
-                search_l_min = max(0, int(prev_cx_l - 70))
-                search_l_max = min(int(car_x + 60), int(prev_cx_l + 70))
+                search_l_min = max(0, int(prev_cx_l - 90))
+                search_l_max = min(w, int(prev_cx_l + 90))
 
             mask_l = np.zeros_like(slice_mask)
             mask_l[:, search_l_min:search_l_max] = slice_mask[:, search_l_min:search_l_max]
@@ -476,8 +476,12 @@ class BezierLaneDetectorNode(Node):
             else:
                 exp_r = car_x + 0.5 * lane_w
 
-            search_r_min = max(int(car_x - 40), int(exp_r - 55))
-            search_r_max = min(w, int(exp_r + 55))
+            if prev_cx_r is None:
+                search_r_min = max(int(car_x - 70), int(exp_r - 70))
+                search_r_max = min(w, int(exp_r + 70))
+            else:
+                search_r_min = max(0, int(prev_cx_r - 90))
+                search_r_max = min(w, int(prev_cx_r + 90))
 
             mask_r = np.zeros_like(slice_mask)
             mask_r[:, search_r_min:search_r_max] = slice_mask[:, search_r_min:search_r_max]
@@ -577,8 +581,8 @@ class BezierLaneDetectorNode(Node):
         mid_ratio = self.lookahead_mid_ratio     # default 0.65 (y = 332)
         far_ratio = self.lookahead_far_ratio     # default 0.45 (y = 230)
 
-        # Balanced lookahead weights: near tracking + mid stability + far curve anticipation
-        lookahead_weights = (0.40, 0.40, 0.20)
+        # Balanced lookahead weights: mid & far preview provide early anticipation for sharp turns
+        lookahead_weights = (0.25, 0.45, 0.30)
 
         metrics = extract_control_metrics(
             center_curve,
@@ -597,12 +601,12 @@ class BezierLaneDetectorNode(Node):
         heading_err = metrics["heading_err_rad"]
 
         # ── Lateral Control Formulation ──────────────────────────────────────
-        # 1. Proportional term:
-        # Scale: kp * (err / 100.0) -> with kp=0.70:
-        #  10 px error -> 0.07 steer
-        #  30 px error -> 0.21 steer
-        #  50 px error -> 0.35 steer
-        p_term = self.kp * (err / 100.0)
+        # 1. Progressive Proportional term:
+        # On straights (|err| < 15 px): soft gain eliminates hunting and swaying.
+        # In curves (|err| > 35 px): full gain provides decisive, authoritative steering.
+        norm_e = err / 100.0
+        prog_scale = 0.55 + 0.45 * min(1.0, abs(norm_e) / 0.35)
+        p_term = self.kp * norm_e * prog_scale
 
         # 2. Derivative term with low-pass filtering and first-frame protection:
         if self.prev_error is None:
@@ -613,7 +617,7 @@ class BezierLaneDetectorNode(Node):
 
         self.filtered_derivative = (self.d_filter_alpha * raw_derivative +
                                     (1.0 - self.d_filter_alpha) * self.filtered_derivative)
-        d_term = float(np.clip(self.kd * (self.filtered_derivative * 0.0004), -0.12, 0.12))
+        d_term = float(np.clip(self.kd * (self.filtered_derivative * 0.0006), -0.15, 0.15))
 
         # 3. Anti-windup Integral term:
         if abs(err) < 40.0:
@@ -622,15 +626,15 @@ class BezierLaneDetectorNode(Node):
             self.integral_error *= 0.5
         i_term = self.ki * self.integral_error
 
-        # 4. Gentle Curvature Feedforward (does not saturate or fight tracking):
+        # 4. Curvature Feedforward: scales through tight curves down to R=40m:
         cs = 0.0
         if radius < 900.0:
             direction = 1.0 if curvature > 0 else (-1.0 if curvature < 0 else 0.0)
-            curv_factor = min(1.0, 350.0 / max(radius, 50.0))
+            curv_factor = min(1.0, 350.0 / max(radius, 40.0))
             cs = direction * self.kc * curv_factor
 
-        # 5. Heading Error Damping:
-        heading_term = self.k_heading * heading_err * 0.30
+        # 5. Heading Error Alignment:
+        heading_term = self.k_heading * heading_err * 0.25
 
         # Combined normalized steering [-1.0, 1.0]
         raw_steer = p_term + d_term + i_term + cs + heading_term

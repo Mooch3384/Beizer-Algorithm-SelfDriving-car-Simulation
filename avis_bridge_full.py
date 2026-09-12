@@ -79,13 +79,16 @@ class AvisFullBridgeNode(Node):
     def steering_cmd_callback(self, msg: Float32):
         """Continuous high-resolution steering in [-1.0, 1.0] -> AvisEngine [-100, 100]."""
         with self.lock:
+            self.has_continuous_steering = True
             val = float(np.clip(msg.data, -1.0, 1.0))
             self.current_steer_cmd = int(round(val * 100.0))
             self.sim_steer_rad = val * math.radians(30.0)
 
     def servo_callback(self, msg: Int8):
         with self.lock:
-            # Fallback for discrete servo messages if /steering_cmd is not in use
+            # Fallback for discrete servo messages ONLY if /steering_cmd is not in use
+            if getattr(self, 'has_continuous_steering', False):
+                return
             self.current_steer_cmd = int((msg.data / 6.0) * 100)
             self.sim_steer_rad = msg.data * self.STEER_TO_RAD
 
