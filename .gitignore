@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Simulator binaries and archives (>100MB exceeds GitHub limits)
+Linux/
+Linux.rar
+*.x86_64
+*.assets
+*.sharedAssets*
+
+# ROS 2 build & install directories
+build/
+install/
+log/
+
+# Runtime and test logs
+*.log
+
+# OS & IDE metadata
+.DS_Store
+__MACOSX/
+.vscode/
+.idea/
+*.swp
+*~
+
+# Scratch & temporary artifacts
+scratch/
+.tempmediaStorage/

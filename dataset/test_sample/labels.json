@@ -1,0 +1,1 @@
+[{"image_file": "frame_00000.jpg", "lanes_count": 2, "lanes": [{"id": "left", "control_points": [[100, 295], [150, 200], [200, 100], [250, 0]]}, {"id": "right", "control_points": [[500, 295], [520, 200], [540, 100], [560, 0]]}], "steering_applied": 10, "timestamp": 0.0}]

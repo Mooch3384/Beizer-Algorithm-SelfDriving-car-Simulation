@@ -1,0 +1,11 @@
+# ROS 2 build artifacts
+build/
+install/
+log/
+
+# Python caching
+__pycache__/
+*.pyc
+
+# OS generated files
+.DS_Store

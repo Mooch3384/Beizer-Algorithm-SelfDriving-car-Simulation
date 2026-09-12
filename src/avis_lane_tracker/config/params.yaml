@@ -1,0 +1,27 @@
+lane_tracker_node:
+  ros__parameters:
+    camera_topic: "/camera/image_raw"
+    odom_topic: "/odom"
+    trajectory_topic: "/robot_trajectory"
+    markers_topic: "/lane/markers"
+    bev_debug_topic: "/lane/bev_debug"
+
+    odom_frame: "odom"
+    base_frame: "base_link"
+
+    bev_width: 640
+    bev_height: 480
+
+    nwindows: 10
+    margin: 40
+    minpix: 50
+    meters_per_pixel_x: 0.0185
+    meters_per_pixel_y: 0.0208
+
+avis_sim_bridge:
+  ros__parameters:
+    host: "127.0.0.1"
+    port: 25001
+    camera_topic: "/camera/image_raw"
+    odom_topic: "/odom"
+    frame_rate: 30.0
