@@ -7,6 +7,7 @@ from std_msgs.msg import Int8, Float32
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 import socket
 import base64
 import numpy as np
@@ -54,6 +55,8 @@ class AvisFullBridgeNode(Node):
         self.speed_feedback_pub = self.create_publisher(Float32, '/car/speed', rt_qos)
         self.odom_pub = self.create_publisher(Odometry, '/odom', odom_qos)
         self.tf_broadcaster = TransformBroadcaster(self)
+        self.static_tf_broadcaster = StaticTransformBroadcaster(self)
+        self._publish_static_map_tf()
 
         self.sock = None
         self.running = True
@@ -163,6 +166,21 @@ class AvisFullBridgeNode(Node):
         t.transform.rotation.z = qz
         t.transform.rotation.w = qw
         self.tf_broadcaster.sendTransform(t)
+
+    def _publish_static_map_tf(self):
+        """Broadcasts static identity transform map -> odom so RViz2 default Fixed Frame (map) works out-of-the-box."""
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = 'map'
+        t.child_frame_id = 'odom'
+        t.transform.translation.x = 0.0
+        t.transform.translation.y = 0.0
+        t.transform.translation.z = 0.0
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 1.0
+        self.static_tf_broadcaster.sendTransform(t)
 
     def _socket_loop(self):
         while self.running and rclpy.ok():

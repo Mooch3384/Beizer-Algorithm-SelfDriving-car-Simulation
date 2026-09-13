@@ -23,12 +23,15 @@ from rclpy.executors import MultiThreadedExecutor
 
 workspace_dir = os.path.dirname(os.path.abspath(__file__))
 source_dir = os.path.join(workspace_dir, "SelfDriving-jetson Source")
+virtual_modelling_dir = os.path.join(workspace_dir, "Virtual-Modelling")
 sys.path.insert(0, source_dir)
+sys.path.insert(0, virtual_modelling_dir)
 sys.path.insert(0, workspace_dir)
 
 from avis_bridge_full import AvisFullBridgeNode
 from bezier_lane_detector_node import BezierLaneDetectorNode
 from controller_node import ControllerNode
+from car_point_visualizer import CarPointVisualizer
 
 
 def is_port_listening(port=25001):
@@ -105,6 +108,7 @@ def main():
     parser = argparse.ArgumentParser(description="BézierLaneNet Autonomous Pipeline for AVIS Engine")
     parser.add_argument("--ckpt", type=str, default="", help="Path to BézierLaneNet model checkpoint (.pth)")
     parser.add_argument("--no_sim_launch", action="store_true", help="Do not auto-launch simulator")
+    parser.add_argument("--rviz", action="store_true", help="Automatically launch RViz2 with preconfigured 3D visualization")
     args, unknown = parser.parse_known_args()
 
     print("=" * 68)
@@ -124,6 +128,21 @@ def main():
         sim_path = os.path.join(workspace_dir, "Linux", "AVISEngine.x86_64")
         sim_proc = ensure_simulator_running(sim_path)
 
+    # Optional RViz2 launch
+    rviz_proc = None
+    if args.rviz:
+        rviz_config_path = os.path.join(workspace_dir, "config", "car_simulation.rviz")
+        if os.path.isfile(rviz_config_path):
+            print(f"[INFO] Launching RViz2 with configuration: {rviz_config_path} ...")
+            rviz_proc = subprocess.Popen(
+                ["rviz2", "-d", rviz_config_path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        else:
+            print("[INFO] Launching default RViz2 ...")
+            rviz_proc = subprocess.Popen(["rviz2"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     rclpy.init(args=sys.argv)
 
     # Configure parameters
@@ -137,17 +156,20 @@ def main():
         ])
 
     controller_node = ControllerNode()
+    visualizer_node = CarPointVisualizer()
 
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(bridge_node)
     executor.add_node(detector_node)
     executor.add_node(controller_node)
+    executor.add_node(visualizer_node)
 
     try:
-        print("[INFO] All 3 nodes initialized under MultiThreadedExecutor:")
-        print("       1. AvisFullBridgeNode (TCP 127.0.0.1:25001 <-> ROS 2, High Throughput Bridge)")
+        print("[INFO] All 4 nodes initialized under MultiThreadedExecutor:")
+        print("       1. AvisFullBridgeNode (TCP 127.0.0.1:25001 <-> ROS 2, High Throughput Bridge, TF map->odom->base_link)")
         print(f"       2. BezierLaneDetectorNode (Checkpoint: '{ckpt_path}' or CV Fallback, Calibrated Tracking)")
         print("       3. ControllerNode (Continuous Actuation, Low-Latency Lateral Control)")
+        print("       4. CarPointVisualizer (3D Point-Robot Model, 50m Planned Trajectory, RViz2 Visualizer)")
         print("[INFO] Spinning pipeline executor. Press Ctrl+C to stop.\n")
         executor.spin()
     except KeyboardInterrupt:
@@ -162,8 +184,15 @@ def main():
         bridge_node.destroy_node()
         detector_node.destroy_node()
         controller_node.destroy_node()
+        visualizer_node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
+
+        if rviz_proc is not None:
+            try:
+                rviz_proc.terminate()
+            except Exception:
+                pass
 
         # Cleanly kill simulator
         print("[INFO] Closing AVIS Engine simulator process...")

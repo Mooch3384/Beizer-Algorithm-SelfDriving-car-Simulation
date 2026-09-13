@@ -1,0 +1,146 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Ground Grid1
+        - /TF Frames1
+        - /Point-Robot (Marker)1
+        - /Planned Trajectory 50m (Marker)1
+        - /Target Point (Marker)1
+        - /Planned Path (Path)1
+        - /Traveled Path (Path)1
+        - /Camera Feed1
+      Splitter Ratio: 0.5
+    Tree Height: 557
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 160
+      Enabled: true
+      Line Style:
+        Value: Lines
+      Name: Ground Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 100
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frame Timeout: 1
+      Frames:
+        All Enabled: true
+      Marker Scale: 0.5
+      Name: TF Frames
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Point-Robot (Marker)
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /car_point_marker
+      Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Planned Trajectory 50m (Marker)
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /planned_trajectory_marker
+      Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Target Point (Marker)
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /target_point_marker
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/Path
+      Color: 0; 255; 255
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.12
+      Name: Planned Path (Path)
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /planned_trajectory
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/Path
+      Color: 255; 165; 0
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.08
+      Name: Traveled Path (Path)
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /car_trajectory
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Camera Feed
+      Normalize Range: true
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug_image
+      Value: true
+  Global Options:
+    Background Color: 35; 35; 40
+    Fixed Frame: odom
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 16
+      Focal Point:
+        X: 4
+        Y: 0
+        Z: 0
+      Focal Shape Size: 0.05
+      Focal Shape Type: Point
+      Name: Current
+      Near Clip Distance: 0.01
+      Pitch: 0.55
+      Target Frame: base_link
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 3.14159
