@@ -61,6 +61,7 @@ class AvisFullBridgeNode(Node):
         self.sock = None
         self.running = True
         self.lock = threading.Lock()
+        self.new_steer_event = threading.Event()
 
         self.current_speed_cmd = 60
         self.current_steer_cmd = 0
@@ -86,6 +87,7 @@ class AvisFullBridgeNode(Node):
             val = float(np.clip(msg.data, -1.0, 1.0))
             self.current_steer_cmd = int(round(val * 100.0))
             self.sim_steer_rad = val * math.radians(30.0)
+            self.new_steer_event.set()
 
     def servo_callback(self, msg: Int8):
         with self.lock:
@@ -94,6 +96,7 @@ class AvisFullBridgeNode(Node):
                 return
             self.current_steer_cmd = int((msg.data / 6.0) * 100)
             self.sim_steer_rad = msg.data * self.STEER_TO_RAD
+            self.new_steer_event.set()
 
     def speed_callback(self, msg: Int8):
         with self.lock:
@@ -220,14 +223,16 @@ class AvisFullBridgeNode(Node):
                     if not buffer or b'<EOF>' not in buffer:
                         continue
 
+                    self.new_steer_event.clear()
                     self._process_rx_buffer(buffer)
                     self.frame_count += 1
                     if self.frame_count % 60 == 0:
                         self.get_logger().info(
                             f"[AVIS Bridge] Active: frame #{self.frame_count} | Steer={steer}"
                         )
-                    # Short yield to prevent socket hogging
-                    time.sleep(0.001)
+                    # Zero-lag synchronization: wait briefly for the perception & control
+                    # pipeline to process this frame and produce the fresh steering command (~3-4ms)
+                    self.new_steer_event.wait(timeout=0.008)
 
             except Exception as e:
                 time.sleep(2.0)

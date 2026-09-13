@@ -5,7 +5,8 @@ scipy>=1.10.0
 matplotlib>=3.7.0
 Pillow>=9.5.0
 
-# Deep Learning Framework (BézierLaneNet)
+# ONNX Runtime & Deep Learning Framework
+onnxruntime>=1.15.0
 torch>=2.0.0
 torchvision>=0.15.0
 
@@ -17,5 +18,3 @@ tensorboardX>=2.6
 
 # Note: ROS 2 dependencies (rclpy, sensor_msgs, geometry_msgs, nav_msgs, std_msgs, cv_bridge)
 # are provided by your ROS 2 environment (ROS 2 Jazzy or Humble recommended).
-# On Ubuntu / Debian systems with ROS 2 installed, ensure cv_bridge is installed via:
-# sudo apt-get install ros-$ROS_DISTRO-cv-bridge ros-$ROS_DISTRO-vision-opencv

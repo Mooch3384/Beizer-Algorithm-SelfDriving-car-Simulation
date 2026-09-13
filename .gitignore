@@ -30,3 +30,4 @@ __MACOSX/
 # Scratch & temporary artifacts
 scratch/
 .tempmediaStorage/
+*.pth
