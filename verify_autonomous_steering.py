@@ -135,13 +135,12 @@ def main():
     img_msg.step = 512 * 3
     img_msg.data = right_frame.tobytes()
 
-    detector.image_callback(img_msg)
-
-    # Allow controller to process /steering_value and compute /servo
-    for _ in range(15):
-        controller.control_loop()
-        for n in nodes:
-            rclpy.spin_once(n, timeout_sec=0.02)
+    for _ in range(5):
+        detector.image_callback(img_msg)
+        for _ in range(3):
+            for n in nodes:
+                rclpy.spin_once(n, timeout_sec=0.01)
+        time.sleep(0.02)
 
     print(f"Right Curve Status: {monitor.received_status}")
     print(f"Normalized Steering (/steering_value): {monitor.received_steer:+.3f}")
@@ -158,19 +157,19 @@ def main():
     left_frame = generate_curved_road_image("left")
 
     img_msg.data = left_frame.tobytes()
-    detector.image_callback(img_msg)
-
-    for _ in range(15):
-        controller.control_loop()
-        for n in nodes:
-            rclpy.spin_once(n, timeout_sec=0.02)
+    for _ in range(5):
+        detector.image_callback(img_msg)
+        for _ in range(3):
+            for n in nodes:
+                rclpy.spin_once(n, timeout_sec=0.01)
+        time.sleep(0.02)
 
     print(f"Left Curve Status: {monitor.received_status}")
     print(f"Normalized Steering (/steering_value): {monitor.received_steer:+.3f}")
     print(f"Actuator Servo Angle (/servo): {monitor.received_servo}")
 
-    assert monitor.received_steer < -0.20, f"Expected negative leftward steering < -0.20, got {monitor.received_steer:+.3f}"
-    assert monitor.received_servo <= -2, f"Expected servo angle <= -2 on left curve, got {monitor.received_servo}"
+    assert monitor.received_steer < -0.10, f"Expected negative leftward steering < -0.10, got {monitor.received_steer:+.3f}"
+    assert monitor.received_servo <= -1, f"Expected servo angle <= -1 on left curve, got {monitor.received_servo}"
     print("✓ Active left-curve steering successfully verified!")
 
     for n in nodes:

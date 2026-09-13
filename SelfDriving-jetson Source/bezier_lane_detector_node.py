@@ -44,6 +44,7 @@ sys.path.insert(0, CURRENT_DIR)
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "BezierLaneNet"))
 
 from bezier_math import CubicBezier, compute_center_bezier, extract_control_metrics, get_perspective_lane_width
+from ipm_transformer import IPMTransformer
 
 # Optional PyTorch import
 try:
@@ -120,6 +121,14 @@ class BezierLaneDetectorNode(Node):
         self.debug_pub = self.create_publisher(Image, '/debug_image', sensor_qos)
         self.bezier_debug_pub = self.create_publisher(Image, '/bezier_lane/debug_image', sensor_qos)
         self.path_pub = self.create_publisher(Path, '/bezier_lane/path', sensor_qos)
+        self.planned_trajectory_pub = self.create_publisher(Path, '/planned_trajectory', sensor_qos)
+
+        # ── Inverse Perspective Mapping (IPM) & Ground Metric Trajectory ─────
+        self.ipm = IPMTransformer(image_width=512, image_height=512)
+        self.last_center_metric = None
+        self.last_left_metric = None
+        self.last_right_metric = None
+        self.last_target_metric = None
 
         # ── Autonomy State Variables ─────────────────────────────────────────
         self.last_steer_time = None
@@ -298,6 +307,8 @@ class BezierLaneDetectorNode(Node):
             "signed_curvature": metrics.get("curvature", 0.0) if metrics else 0.0,
             "heading_err_deg": metrics.get("heading_err_deg", 0.0) if metrics else 0.0,
             "blended_err": metrics.get("blended_err", 0.0) if metrics else 0.0,
+            "target_metric_x": self.last_target_metric[0] if self.last_target_metric else 0.0,
+            "target_metric_y": self.last_target_metric[1] if self.last_target_metric else 0.0,
         }
         status_msg = String()
         status_msg.data = json.dumps(status_dict)
@@ -376,6 +387,7 @@ class BezierLaneDetectorNode(Node):
                     if left_c is not None or right_c is not None:
                         center_c = compute_center_bezier(left_c, right_c, self.expected_lane_width)
                         self.mode = "VISION_TRACKING"
+                        self._update_metric_trajectories(left_c, right_c, center_c)
                         return left_c, right_c, center_c
             except Exception as e:
                 self.get_logger().error(f"DL inference exception: {e}. Switching to CV Centroid Fallback.")
@@ -384,9 +396,38 @@ class BezierLaneDetectorNode(Node):
         left_c, right_c, center_c = self._cv_centroid_fallback(frame)
         if center_c is not None:
             self.mode = "CV_FALLBACK_TRACKING"
+            self._update_metric_trajectories(left_c, right_c, center_c)
             return left_c, right_c, center_c
 
+        self._update_metric_trajectories(None, None, None)
         return None, None, None
+
+    def _update_metric_trajectories(self,
+                                    left_c: Optional[CubicBezier],
+                                    right_c: Optional[CubicBezier],
+                                    center_c: Optional[CubicBezier]):
+        """Unprojects parametric Bézier curves from camera pixels to physical ground metric space (50m)."""
+        if left_c is not None:
+            self.last_left_metric = self.ipm.project_bezier_to_metric(left_c, num_samples=30)
+        else:
+            self.last_left_metric = None
+
+        if right_c is not None:
+            self.last_right_metric = self.ipm.project_bezier_to_metric(right_c, num_samples=30)
+        else:
+            self.last_right_metric = None
+
+        if center_c is not None:
+            self.last_center_metric = self.ipm.project_bezier_to_metric(center_c, num_samples=35)
+            # Preview lookahead target point in metric space at X ~ 12 meters
+            if len(self.last_center_metric) > 0:
+                idx = int(np.argmin(np.abs(self.last_center_metric[:, 0] - 12.0)))
+                self.last_target_metric = (float(self.last_center_metric[idx, 0]), float(self.last_center_metric[idx, 1]))
+            else:
+                self.last_target_metric = None
+        else:
+            self.last_center_metric = None
+            self.last_target_metric = None
 
     def _partition_lanes(self, curves: List[CubicBezier], car_center_x: float, orig_h: float):
         """Partitions detected curves into left and right lanes closest to vehicle centerline."""
@@ -646,6 +687,7 @@ class BezierLaneDetectorNode(Node):
 
     def _publish_path(self, center_curve: CubicBezier, header):
         """Publishes Bézier target path as nav_msgs/msg/Path for RViz2."""
+        # 1. Legacy /bezier_lane/path (image coordinate scaling)
         path_msg = Path()
         path_msg.header = header
         path_msg.header.frame_id = 'base_link'
@@ -664,6 +706,26 @@ class BezierLaneDetectorNode(Node):
             path_msg.poses.append(pose)
 
         self.path_pub.publish(path_msg)
+
+        # 2. Metric Ground-Plane Planned Trajectory (50m Horizon) for RViz2
+        if self.last_center_metric is not None and len(self.last_center_metric) > 0:
+            plan_msg = Path()
+            plan_msg.header = header
+            plan_msg.header.frame_id = 'base_link'
+
+            for pt in self.last_center_metric:
+                pose = PoseStamped()
+                pose.header = header
+                pose.header.frame_id = 'base_link'
+                # Vehicle base_link frame: X is forward (+), Y is left (+)
+                # IPM metric coordinates: pt[0] = forward meters, pt[1] = lateral meters (positive = right)
+                pose.pose.position.x = float(pt[0])
+                pose.pose.position.y = float(-pt[1])
+                pose.pose.position.z = 0.0
+                pose.pose.orientation.w = 1.0
+                plan_msg.poses.append(pose)
+
+            self.planned_trajectory_pub.publish(plan_msg)
 
     # ── Real-Time Visual Debugger Overlay ────────────────────────────────────
     def _render_debugger(self,
@@ -744,6 +806,17 @@ class BezierLaneDetectorNode(Node):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 255, 255), 1, cv2.LINE_AA)
         cv2.putText(vis, f"Mode: {self.mode}", (20, 120),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.38, mode_color, 1, cv2.LINE_AA)
+
+        # 6. Top-Down Radar HUD Mini-Map (BEV 50m Horizon) in top-right corner
+        vis = self.ipm.render_hud_minimap(
+            vis,
+            center_metric=self.last_center_metric,
+            left_metric=self.last_left_metric,
+            right_metric=self.last_right_metric,
+            target_pt_metric=self.last_target_metric,
+            origin_offset=(360, 10),
+            map_size=(140, 230)
+        )
 
         return vis
 

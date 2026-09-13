@@ -29,11 +29,13 @@ class VerificationSubscriber(Node):
         self.received_status = None
         self.received_debug_img = None
         self.received_path = None
+        self.received_planned_path = None
 
         self.create_subscription(Float32, '/steering_value', self.steer_cb, 10)
         self.create_subscription(String, '/lane_status', self.status_cb, 10)
         self.create_subscription(Image, '/debug_image', self.debug_cb, 10)
         self.create_subscription(Path, '/bezier_lane/path', self.path_cb, 10)
+        self.create_subscription(Path, '/planned_trajectory', self.planned_path_cb, 10)
 
     def steer_cb(self, msg: Float32):
         self.received_steering = msg.data
@@ -46,6 +48,9 @@ class VerificationSubscriber(Node):
 
     def path_cb(self, msg: Path):
         self.received_path = len(msg.poses)
+
+    def planned_path_cb(self, msg: Path):
+        self.received_planned_path = msg.poses
 
 
 def run_test():
@@ -84,13 +89,24 @@ def run_test():
     print(f"Steering received: {verifier.received_steering}")
     print(f"Status received: {verifier.received_status}")
     print(f"Debug image received: {verifier.received_debug_img}")
-    print(f"Path poses count: {verifier.received_path}")
+    print(f"Legacy path poses count: {verifier.received_path}")
+    print(f"Metric planned trajectory poses count: {len(verifier.received_planned_path) if verifier.received_planned_path else None}")
 
     assert verifier.received_steering is not None, "Steering message not received!"
     assert -1.0 <= verifier.received_steering <= 1.0, f"Steering {verifier.received_steering} out of range [-1, 1]!"
     assert verifier.received_status is not None, "Status message not received!"
+    assert "target_metric_x" in verifier.received_status, "target_metric_x missing from status!"
     assert verifier.received_debug_img == (512, 512), f"Debug image resolution mismatch: {verifier.received_debug_img}"
     assert verifier.received_path is not None and verifier.received_path > 0, "Bézier Path not received!"
+    assert verifier.received_planned_path is not None and len(verifier.received_planned_path) > 0, "Planned trajectory not received!"
+    
+    # Verify metric coordinates in base_link (X positive forward)
+    first_pt = verifier.received_planned_path[0].pose.position
+    last_pt = verifier.received_planned_path[-1].pose.position
+    print(f"Planned trajectory starts at X={first_pt.x:.2f}m, Y={first_pt.y:.2f}m")
+    print(f"Planned trajectory extends to X={last_pt.x:.2f}m, Y={last_pt.y:.2f}m")
+    assert first_pt.x >= 0.0 and last_pt.x > first_pt.x, "Planned trajectory should extend forward in +X!"
+    assert last_pt.x >= 12.0, f"Planned trajectory should extend forward, got {last_pt.x}m"
 
     detector.destroy_node()
     verifier.destroy_node()
